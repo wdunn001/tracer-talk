@@ -11,10 +11,12 @@ from scapy.all import (
     sniff, send, IP, ICMP, Raw, conf,
 )
 
+import random
+
 from server.config import (
-    SERVER_IP, FAKE_HOP_BASE_IP, ICMP_HOP_DELAY_MS,
+    SERVER_IP, FAKE_HOP_BASE_IP, ICMP_HOP_DELAY_MS, ICMP_TTL_MIN, ICMP_TTL_MAX,
 )
-from server.client_hub import ClientHub, ICMPFingerprint
+from server.client_hub import ClientHub
 
 
 class ICMPTunnel:
@@ -124,7 +126,7 @@ class ICMPTunnel:
         enclosed = orig_ip_bytes[:ip_hdr_len + 8]
 
         time_exceeded = (
-            IP(src=spoofed_ip, dst=original_pkt[IP].src, ttl=255)
+            IP(src=spoofed_ip, dst=original_pkt[IP].src, ttl=random.randint(ICMP_TTL_MIN, ICMP_TTL_MAX))
             / ICMP(type=11, code=0)
             / Raw(load=enclosed)
         )
@@ -137,7 +139,7 @@ class ICMPTunnel:
     def _send_echo_reply(self, original_pkt):
         """Send a standard ICMP Echo Reply (final destination)."""
         echo_reply = (
-            IP(src=SERVER_IP, dst=original_pkt[IP].src, ttl=255)
+            IP(src=SERVER_IP, dst=original_pkt[IP].src, ttl=random.randint(ICMP_TTL_MIN, ICMP_TTL_MAX))
             / ICMP(
                 type=0,
                 id=original_pkt[ICMP].id,

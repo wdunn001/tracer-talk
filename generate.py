@@ -23,6 +23,9 @@ TEMPLATE_FILES = [
     "clients/chat_client.ps1",
     "clients/chat_client.bat",
     "clients/chat_client.sh",
+    "clients/chat_client.min.ps1",
+    "clients/chat_client.min.bat",
+    "clients/chat_client.min.sh",
     "bootstrap/bootstrap_ps.txt",
     "bootstrap/bootstrap_cmd.txt",
     "bootstrap/bootstrap_bash.txt",
@@ -87,7 +90,8 @@ def main():
 
     print()
     print("Done. Use the files in build/ with the orchestrator:")
-    print(f"  sudo python -m server.orchestrator --payload {args.out}/clients/chat_client.ps1 --domain {args.domain} --ip {args.ip}")
+    print(f"  sudo python -m server.orchestrator --payload {args.out}/clients/chat_client.min.ps1 --domain {args.domain} --ip {args.ip}")
+    print(f"  (use .min. variants for smallest payload, fewer hops needed)")
 
 
 if __name__ == "__main__":

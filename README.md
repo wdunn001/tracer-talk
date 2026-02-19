@@ -19,22 +19,26 @@ The delivered payload is a compact chat client that continues to communicate bid
 
 ```
                   Orchestrator (Python)
-                  +---------------------------+
-                  |  DNS Handler (port 53)    |  <-- Subdomain command routing
-                  |  ICMP Tunnel (Scapy)      |  <-- Fake hop factory
-                  |  Session Manager          |  <-- Per-client state
-                  |  Shard Encoder            |  <-- Payload chunking + crypto
-                  |  Chat CLI                 |  <-- Server operator interface
-                  +---------------------------+
-                           |
-              tracert / traceroute queries
-                           |
-                  +---------------------------+
-                  |  Client (zero deps)       |
-                  |  Bootstrap one-liner      |  <-- Downloads + executes payload
-                  |  Chat client (.bat/.ps1/.sh)  <-- Bidirectional chat
-                  +---------------------------+
+                  +-------------------------------+
+                  |  DNS Handler (port 53)        |  <-- Subdomain command routing
+                  |  ICMP Tunnel (Scapy)          |  <-- Fake hop factory
+                  |  Client Hub                   |  <-- Unique ID per client via
+                  |    ICMP Fingerprinting        |      OS detection (TTL + payload)
+                  |    Session Store              |      Multi-client multiplexing
+                  |  Shard Encoder                |  <-- Payload chunking + XOR crypto
+                  |  Chat CLI                     |  <-- Server operator interface
+                  +-------------------------------+
+                              |
+                 tracert / traceroute queries
+                              |
+                  +-------------------------------+
+                  |  Client (zero dependencies)   |
+                  |  Bootstrap one-liner           |  <-- tracert | findstr | decode | exec
+                  |  Chat client (.bat/.ps1/.sh)   |  <-- Full-duplex tracert chat
+                  +-------------------------------+
 ```
+
+The **Client Hub** assigns each client a stable 16-character hex ID derived from a composite of their source IP and ICMP fingerprint (initial TTL and payload hash). This means two different machines behind the same NAT are distinguished if they run different operating systems (Windows TTL=128 vs Linux TTL=64). The server operator selects clients by ID prefix, full ID, or IP address.
 
 ## Subdomain Command Map
 
@@ -201,21 +205,32 @@ Give the target the appropriate one-liner from `bootstrap/`. See [clients/README
 [*] Payload loaded: build/clients/chat_client.ps1 (1009 bytes)
 [*] Payload encoded into 6 data shards + end marker
 [*] Server ready. Waiting for connections...
-[*] Commands: /list  /select <ip>  /quit
+[*] Commands: /list  /select <id|ip>  /info <id|ip>  /quit
 
-[+] New client: 198.51.100.25
-[>] Delivering payload to 198.51.100.25 (6 shards)
+[+] New client: 9ff531e2(198.51.100.25) [Windows]
+[>] Delivering payload (6 shards)
 
 server> /list
-  198.51.100.25  [CHATTING]  inbox:0  outbox:0
+  9ff531e2  198.51.100.25  [DELIVERING]  Windows       in:0 out:0  last:3s <--
 
-server> /select 198.51.100.25
-[*] Selected: 198.51.100.25
+server> /select 9ff5
+[*] Selected: 9ff531e2(198.51.100.25)
 
 server> Hello from the server!
-[*] Queued for 198.51.100.25 (will deliver on next rx poll)
+[*] Queued for 9ff531e2(198.51.100.25) (will deliver on next rx poll)
 
-[198.51.100.25] Hi back!
+[9ff531e2(198.51.100.25)] Hi back!
+
+server> /info 9ff5
+  Client ID:    9ff531e2a1b3c4d5
+  Source IP:     198.51.100.25
+  State:         CHATTING
+  OS hint:       Windows
+  Initial TTL:   128
+  Payload hash:  a3b1c2d4e5f60718
+  Inbox:         1 messages
+  Outbox:        0 messages
+  Last seen:     12s ago
 ```
 
 ### Client Side (Bootstrap)
@@ -282,7 +297,7 @@ Disconnected.
 - **Algorithm**: XOR with 4-byte repeating key
 - **Key source**: Server IP address octets (e.g., `203.0.113.50` = `[0xCB, 0x00, 0x71, 0x32]`)
 - **Encoding**: Hex (0-9, a-f) for DNS-safe transport
-- **Compression**: zlib applied before encryption for payload delivery
+- **Minified clients**: `.min.` variants strip whitespace, comments, and verbose names for ~20-30% smaller payloads and fewer hops
 
 ## File Structure
 
@@ -295,9 +310,12 @@ tracerterminal/
     shard_encoder.py      # Payload chunking, XOR crypto, hex encoding
     config.py             # Domain, IP, capacity constants -- EDIT THIS FIRST
   clients/                # TEMPLATES with {{placeholders}}
-    chat_client.bat       # CMD chat client template
-    chat_client.ps1       # PowerShell chat client template
-    chat_client.sh        # Bash chat client template
+    chat_client.bat       # CMD chat client template (readable)
+    chat_client.ps1       # PowerShell chat client template (readable)
+    chat_client.sh        # Bash chat client template (readable)
+    chat_client.min.bat   # CMD minified (~17% smaller)
+    chat_client.min.ps1   # PowerShell minified (~21% smaller)
+    chat_client.min.sh    # Bash minified (~31% smaller)
     README.md             # How the clients and protocol work
   bootstrap/              # TEMPLATES with {{placeholders}}
     bootstrap_cmd.txt     # CMD one-liner template
@@ -326,8 +344,10 @@ Related work:
 
 ## Mitigations
 
-- Enforce `tracert -d` / `traceroute -n` (disables PTR resolution)
-- Monitor for high-entropy PTR hostnames in DNS traffic
-- DNS firewalls that strip shell-sensitive characters from PTR responses
-- Block ICMP Time Exceeded from unexpected sources
-- Rate-limit DNS PTR queries from single hosts
+- **Disable PTR in diagnostics**: Enforce `tracert -d` / `traceroute -n` via Group Policy or shell aliases to prevent hostname resolution
+- **Entropy scoring on PTR responses**: Monitor for high-entropy hostnames in DNS PTR traffic -- legitimate reverse DNS looks like `router-gw-01.isp.net`, not `4a6f686e446f6573.206e6f74.lab.example.com`
+- **ICMP Time Exceeded anomaly detection**: Real intermediate routers send Time Exceeded with TTL values that decrease with hop distance; fake hops from a single server all arrive with the same TTL (configurable, default 60), which is unusual for routers at different points in a path
+- **ICMP rate limiting**: A single tracert generates 3 probes per hop across 30 hops = 90 packets in rapid succession to the same destination -- rate limiting ICMP to a single target can throttle or break the delivery
+- **Block ICMP Time Exceeded from unexpected sources**: If your perimeter sees Time Exceeded responses from IPs in the `10.x.x.x` range (our default fake hop base), that's a strong indicator -- private IPs should never appear as internet-facing router hops
+- **DNS PTR query volume monitoring**: A normal tracert generates one PTR query per hop; a Tracer-Terminal delivery generates a burst of PTR queries for sequential IPs in an unusual range, which stands out in passive DNS logs
+- **Outbound ICMP restrictions**: Blocking ICMP Echo Request at the perimeter kills tracert entirely, though this has operational trade-offs (breaks path MTU discovery and basic troubleshooting)

@@ -2,7 +2,6 @@
 Tracer Terminal - Shard Encoder / Decoder
 Converts raw bytes <-> encrypted hex shards packed into DNS hostnames.
 """
-import zlib
 from server.config import (
     DOMAIN_ZONE, XOR_KEY, FQDN_MAX, LABEL_MAX,
     CMD_END,
@@ -31,15 +30,12 @@ def xor_crypt(data: bytes, key: bytes = XOR_KEY) -> bytes:
     return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
 
 
-def encode_payload(payload: bytes, compress: bool = True) -> list[str]:
+def encode_payload(payload: bytes) -> list[str]:
     """
     Encode a payload into a list of PTR hostnames (shards).
     Returns FQDNs like: '4a6f686e.446f6573.DOMAIN_ZONE'
     Plus a terminator: 'end.DOMAIN_ZONE'
     """
-    if compress:
-        payload = zlib.compress(payload, level=9)
-
     encrypted = xor_crypt(payload)
     hex_str = encrypted.hex()
 
@@ -65,10 +61,10 @@ def encode_payload(payload: bytes, compress: bool = True) -> list[str]:
     return shards
 
 
-def decode_payload(hostnames: list[str], decompress: bool = True) -> bytes:
+def decode_payload(hostnames: list[str]) -> bytes:
     """
     Decode PTR hostnames back into the original payload.
-    Strips the domain suffix, concatenates hex data, XOR decrypts, decompresses.
+    Strips the domain suffix, concatenates hex data, XOR decrypts.
     """
     suffix = f".{DOMAIN_ZONE}"
     hex_parts = []
@@ -82,11 +78,7 @@ def decode_payload(hostnames: list[str], decompress: bool = True) -> bytes:
 
     hex_str = "".join(hex_parts)
     raw = bytes.fromhex(hex_str)
-    decrypted = xor_crypt(raw)
-
-    if decompress:
-        decrypted = zlib.decompress(decrypted)
-    return decrypted
+    return xor_crypt(raw)
 
 
 def encode_message(message: str) -> str:
@@ -96,7 +88,6 @@ def encode_message(message: str) -> str:
     """
     encrypted = xor_crypt(message.encode("utf-8"))
     hex_str = encrypted.hex()
-    # Split into 63-char labels
     labels = [hex_str[i:i + LABEL_MAX] for i in range(0, len(hex_str), LABEL_MAX)]
     return ".".join(labels)
 

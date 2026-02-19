@@ -17,6 +17,9 @@ MAX_HOPS = 30          # tracert default on most systems
 RESERVED_HOPS = 2      # 1 for end marker, 1 for final destination echo reply
 FAKE_HOP_BASE_IP = "10.200.0."  # spoofed source IPs: 10.200.0.1, .2, .3 ...
 ICMP_HOP_DELAY_MS = 5  # simulated latency per fake hop
+ICMP_TTL_MIN = 50      # Randomize TTL on ICMP responses within this range
+ICMP_TTL_MAX = 120     # Real routers arrive at client with varying TTLs depending
+                        # on OS and return path distance. A uniform TTL is a red flag.
 
 # Shard capacity (auto-calculated)
 FQDN_MAX = 253

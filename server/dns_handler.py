@@ -2,14 +2,11 @@
 Tracer Terminal - DNS Handler
 dnslib-based UDP DNS server that routes queries through the subdomain command map.
 """
-import threading
-import struct
-import socket
-from dnslib import DNSRecord, DNSHeader, RR, QTYPE, A, PTR, TXT
+from dnslib import RR, QTYPE, A, PTR
 from dnslib.server import DNSServer, BaseResolver
 
 from server.config import (
-    DOMAIN_ZONE, SERVER_IP, DNS_PORT, DNS_LISTEN, XOR_KEY,
+    DOMAIN_ZONE, SERVER_IP, DNS_PORT, DNS_LISTEN,
     CMD_PAYLOAD, CMD_KEY, CMD_TX, CMD_RX, CMD_ACK, CMD_END,
     FAKE_HOP_BASE_IP,
 )
@@ -23,7 +20,6 @@ class TracerResolver(BaseResolver):
 
     def __init__(self):
         self.orchestrator = None
-        self._ptr_cache: dict[str, list[str]] = {}  # client_ip -> list of PTR FQDNs
 
     def set_orchestrator(self, orch):
         self.orchestrator = orch
