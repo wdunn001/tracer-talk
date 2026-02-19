@@ -15,9 +15,9 @@ XOR_KEY = bytes(int(o) for o in SERVER_IP.split("."))
 # ICMP fake-hop settings
 MAX_HOPS = 30          # tracert default on most systems
 RESERVED_HOPS = 2      # 1 for end marker, 1 for final destination echo reply
-FAKE_HOP_BASE_IP = "10.200.0."  # spoofed source IPs: 10.200.0.1, .2, .3 ...
-ICMP_HOP_DELAY_MS = 5  # simulated latency per fake hop
-ICMP_TTL_MIN = 50      # Randomize TTL on ICMP responses within this range
+ICMP_DELAY_MIN_MS = 2   # Randomize per-hop response delay within this range (ms)
+ICMP_DELAY_MAX_MS = 40  # Real hops vary from <1ms (local) to 30ms+ (cross-continent)
+ICMP_TTL_MIN = 50       # Randomize TTL on ICMP responses within this range
 ICMP_TTL_MAX = 120     # Real routers arrive at client with varying TTLs depending
                         # on OS and return path distance. A uniform TTL is a red flag.
 
@@ -39,6 +39,10 @@ MAX_HEX_PER_HOP = sum(_labels)
 MAX_BYTES_PER_HOP = MAX_HEX_PER_HOP // 2  # 2 hex chars = 1 byte
 USABLE_HOPS = MAX_HOPS - RESERVED_HOPS
 MAX_PAYLOAD_BYTES = MAX_BYTES_PER_HOP * USABLE_HOPS
+
+# DNS record TTLs (seconds). 0 = don't cache.
+DNS_TTL_A = 0              # A record responses for command subdomains
+DNS_TTL_PTR = 0            # PTR record responses for fake hop hostnames (shard data)
 
 # Client poll rate (seconds between rx polls in the chat loop)
 POLL_RATE = 5  # seconds to wait between downlink polls; lower = more responsive but noisier

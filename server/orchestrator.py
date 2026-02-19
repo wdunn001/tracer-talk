@@ -104,12 +104,9 @@ class Orchestrator:
         if self._active_client_id == session.client_id:
             self._active_client_id = None
 
-    def get_ptr_for_hop(self, client_ip: str, hop_ip: str) -> str | None:
-        """DNS resolver calls this to get PTR hostname for a fake hop."""
-        session = self.hub.get_by_ip(client_ip)
-        if not session:
-            return None
-        return self.icmp.get_ptr_hostname(session.client_id, hop_ip)
+    def get_ptr_for_hop(self, hop_ip: str) -> str | None:
+        """DNS resolver calls this to get PTR hostname for a fake hop IP."""
+        return self.icmp.get_ptr_hostname(hop_ip)
 
     # --- Server lifecycle ---
 
