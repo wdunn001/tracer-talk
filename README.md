@@ -114,7 +114,7 @@ DOMAIN_ZONE = "lab.yourdomain.com"   # must match your NS delegation
 SERVER_IP = "YOUR_SERVER_PUBLIC_IP"   # the IP from your glue A record
 ```
 
-The `SERVER_IP` also becomes the 4-byte XOR encryption key (its octets), and is what `tracert` displays in its header line.
+The `SERVER_IP` also becomes the 4-byte XOR encryption key (its octets), and is what `tracert` displays in its header line. Optional: `COMPRESS_PAYLOAD` (default True) and `STEALTH_RESERVED` (chars for prefix/suffix labels) are in the same file.
 
 ### Step 3: Install Dependencies
 
@@ -303,8 +303,8 @@ tracerterminal/
     orchestrator.py       # Director: wires components, manages sessions, chat CLI
     dns_handler.py        # dnslib DNS server with subdomain command routing
     icmp_tunnel.py        # Scapy ICMP fake-hop factory
-    shard_encoder.py      # Payload chunking, XOR crypto, hex encoding
-    config.py             # Domain, IP, capacity constants -- EDIT THIS FIRST
+    shard_encoder.py      # Payload chunking, XOR crypto, hex encoding, stealth hostnames, optional gzip
+    config.py             # Domain, IP, capacity constants, COMPRESS_PAYLOAD, STEALTH_RESERVED -- EDIT THIS FIRST
   clients/                # TEMPLATES with {{placeholders}}
     chat_client.bat       # CMD chat client template (readable)
     chat_client.ps1       # PowerShell chat client template (readable)
