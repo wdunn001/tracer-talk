@@ -10,8 +10,8 @@ The Orchestrator listens on port 53 (DNS) and ICMP. When a "victim" or remote ac
 
 1. Responds to the DNS A-record query for the target subdomain (the resolved IP doubles as the XOR encryption key)
 2. Creates fake ICMP hops by responding with "Time Exceeded" messages from spoofed IPs
-3. Serves PTR records for each spoofed IP containing encrypted hex-encoded payload shards
-4. The victim's `tracert` output displays these shard hostnames, which the one-liner extracts, decodes, and executes
+3. Serves PTR records for each spoofed IP containing encrypted hex-encoded payload shards in **stealth hostnames** that look like transit routers (e.g. `ge-0-0-1.4a6f686e.nyc.lab.yourdomain.com`)
+4. The victim's `tracert` output displays these shard hostnames; the one-liner extracts hex-only labels, decodes, and executes
 
 The delivered payload is a compact chat client that continues to communicate bidirectionally over tracert commands.
 
@@ -54,13 +54,12 @@ All client communication uses `tracert [command].lab.yourdomain.com`:
 
 ## Shard Capacity
 
-Each fake hop carries a PTR hostname up to 253 characters (RFC 1035). The shard encoder auto-calculates capacity based on the configured domain:
+Each fake hop carries a PTR hostname up to 253 characters (RFC 1035). Hostnames are **stealth-formatted**: a random prefix label (e.g. `ge-0-0-1`, `cr1`, `nyc`), then hex payload labels, then a random suffix label (e.g. `nyc`, `lax`), then the domain. The shard encoder auto-calculates capacity:
 
 - FQDN limit: 253 chars
-- Domain suffix `.lab.yourdomain.com`: 17 chars
-- Available per hop: ~233 hex chars across 4 labels (~116 bytes)
-- Default 30-hop tracert with ~15 usable hops: **~1,740 bytes**
-- Best case (short route, 28 hops): **~3,248 bytes**
+- Domain suffix + stealth prefix/suffix: ~37 chars reserved
+- Available per hop: ~210 hex chars across labels (~105 bytes), each label even-length for clean byte boundaries
+- Default 30-hop tracert with ~28 usable hops: **~2,940 bytes** max payload
 
 ## Prerequisites
 
@@ -341,7 +340,7 @@ Related work:
 ## Mitigations
 
 - **Disable PTR in diagnostics**: Enforce `tracert -d` / `traceroute -n` via Group Policy or shell aliases to prevent hostname resolution
-- **Entropy scoring on PTR responses**: Monitor for high-entropy hostnames in DNS PTR traffic -- legitimate reverse DNS looks like `router-gw-01.isp.net`, not `4a6f686e446f6573.206e6f74.lab.example.com`
+- **PTR hostname structure**: Stealth hostnames look like `ge-0-0-1.4a6f686e.nyc.lab.example.com` (prefix + hex labels + suffix). Detection requires parsing labels and flagging those that are pure hex of even length, or correlating many PTRs under the same domain from different IPs in one trace
 - **ICMP Time Exceeded anomaly detection**: Real intermediate routers send Time Exceeded with TTL values that decrease with hop distance; fake hops from a single server all arrive with the same TTL (configurable, default 60), which is unusual for routers at different points in a path
 - **ICMP rate limiting**: A single tracert generates 3 probes per hop across 30 hops = 90 packets in rapid succession to the same destination -- rate limiting ICMP to a single target can throttle or break the delivery
 - **ICMP Time Exceeded source correlation**: Fake hops use randomized public IPs from realistic transit ranges, but all arrive from the same physical server. Network taps comparing the ethernet source MAC or upstream router for Time Exceeded packets would reveal they all originate from the same path

@@ -5,7 +5,7 @@ d(){ local h="$1" s="" i=0;while [ $i -lt ${#h} ];do s+=$(printf "\\x$(printf '%
 while read -p "you: " M;do
 [ "$M" = "/quit" ]&&{ traceroute -m1 -w1 "end.$Z">/dev/null 2>&1;break;}
 traceroute -m1 -w1 "$(e "$M").tx.$Z">/dev/null 2>&1;R=""
-while IFS= read -r l;do echo "$l"|grep -qi "$Z"&&! echo "$l"|grep -qiE "(end|empty|rx)\.$Z"&&{ w=$(echo "$l"|grep -oP '\S+(?=\.'"$Z"')');[ -n "$w" ]&&R+="${w//./}";}
+while IFS= read -r l;do echo "$l"|grep -qi "$Z"&&! echo "$l"|grep -qiE "(end|empty|rx)\.$Z"&&{ w=$(echo "$l"|grep -oP '\S+(?=\.'"$Z"')');[ -n "$w" ]&&R+=$(echo "$w"|tr '.' '\n'|grep -E '^[0-9a-fA-F]+$'|while read -r lbl; do [ $((${#lbl}%2)) -eq 0 ] && printf "%s" "$lbl"; done);}
 done< <(traceroute -w2 "rx.$Z" 2>&1)
 [ -n "$R" ]&&echo "< $(d "$R")"
 sleep {{POLL_RATE}}

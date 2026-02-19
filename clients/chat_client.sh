@@ -33,7 +33,7 @@ while true;do
     if echo "$line"|grep -qi "$Z";then
       if ! echo "$line"|grep -qiE "(end|empty|rx)\.$Z";then
         w=$(echo "$line"|grep -oP '\S+(?=\.'"$Z"')')
-        [ -n "$w" ] && R+="${w//./}"
+        [ -n "$w" ] && R+=$(echo "$w"|tr '.' '\n'|grep -E '^[0-9a-fA-F]+$'|while read -r lbl; do [ $((${#lbl}%2)) -eq 0 ] && printf "%s" "$lbl"; done)
       fi
     fi
   done < <(traceroute -w 2 "rx.$Z" 2>&1)

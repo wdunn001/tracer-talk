@@ -1,28 +1,49 @@
 """
 Tracer Terminal - Shard Encoder / Decoder
 Converts raw bytes <-> encrypted hex shards packed into DNS hostnames.
+PTR hostnames use realistic-looking transit router labels (prefix/suffix) with
+hex payload in the middle so passive DNS sees router-like names, not raw hex.
 """
+import re
+import random
 from server.config import (
     DOMAIN_ZONE, XOR_KEY, FQDN_MAX, LABEL_MAX,
-    CMD_END,
+    CMD_END, STEALTH_RESERVED,
+)
+
+# Realistic transit-router style labels for PTR hostnames (hex is in the middle)
+_PREFIX_LABELS = (
+    "ge-0-0-1", "xe-1-2-3", "te-0-1-0", "so-0-0-0", "et-0-0-1",
+    "cr1", "cr2", "ar1", "ar2", "edge1", "core1", "gw1", "rtr1",
+)
+_SUFFIX_LABELS = (
+    "nyc", "lax", "lhr", "fra", "sin", "syd", "dfw", "ord", "sea", "ams", "iad",
 )
 
 
-def _compute_label_sizes(domain_zone: str) -> list[int]:
-    """Calculate how many 63-char labels fit in 253-char FQDN minus the domain suffix."""
+def _compute_label_sizes(domain_zone: str, reserved: int = 0) -> list[int]:
+    """Calculate how many 63-char labels fit in 253-char FQDN minus domain suffix and reserved.
+    Each label size is forced to be even so hex decoding never drops a half-byte."""
     suffix_len = len(f".{domain_zone}")
-    available = FQDN_MAX - suffix_len
+    available = FQDN_MAX - suffix_len - reserved
     labels = []
     remaining = available
     while remaining > 0:
         lbl = min(LABEL_MAX, remaining)
+        if lbl % 2 != 0:
+            lbl -= 1  # hex labels must be even length (pairs of hex chars = one byte)
+        if lbl <= 0:
+            break
         labels.append(lbl)
         remaining -= lbl + 1  # dot separator
     return labels
 
 
-LABEL_SIZES = _compute_label_sizes(DOMAIN_ZONE)
+LABEL_SIZES = _compute_label_sizes(DOMAIN_ZONE, STEALTH_RESERVED)
 MAX_HEX_PER_HOP = sum(LABEL_SIZES)
+
+# Regex: label is only hex chars and has even length (valid hex bytes)
+_HEX_LABEL_RE = re.compile(r"^[0-9a-fA-F]+$")
 
 
 def xor_crypt(data: bytes, key: bytes = XOR_KEY) -> bytes:
@@ -30,10 +51,24 @@ def xor_crypt(data: bytes, key: bytes = XOR_KEY) -> bytes:
     return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
 
 
+def _extract_hex_from_hostname_part(hostname_part: str) -> str:
+    """
+    From the part of a hostname before the domain zone, extract only hex-carrying labels.
+    Labels that are purely [0-9a-fA-F] and have even length are treated as hex; others
+    (e.g. ge-0-0-1, nyc) are decorative and skipped. Used by decode_payload and by clients.
+    """
+    out = []
+    for label in hostname_part.split("."):
+        label = label.strip()
+        if label and len(label) % 2 == 0 and _HEX_LABEL_RE.match(label):
+            out.append(label.lower())
+    return "".join(out)
+
+
 def encode_payload(payload: bytes) -> list[str]:
     """
-    Encode a payload into a list of PTR hostnames (shards).
-    Returns FQDNs like: '4a6f686e.446f6573.DOMAIN_ZONE'
+    Encode a payload into a list of PTR hostnames (shards) that look like transit routers.
+    Returns FQDNs like: 'ge-0-0-1.4a6f686e.446f6573.nyc.DOMAIN_ZONE'
     Plus a terminator: 'end.DOMAIN_ZONE'
     """
     encrypted = xor_crypt(payload)
@@ -45,16 +80,18 @@ def encode_payload(payload: bytes) -> list[str]:
         chunk = hex_str[offset:offset + MAX_HEX_PER_HOP]
         offset += MAX_HEX_PER_HOP
 
-        labels = []
+        hex_labels = []
         pos = 0
         for size in LABEL_SIZES:
             part = chunk[pos:pos + size]
             if not part:
                 break
-            labels.append(part)
+            hex_labels.append(part)
             pos += size
 
-        hostname = ".".join(labels) + f".{DOMAIN_ZONE}"
+        prefix = random.choice(_PREFIX_LABELS)
+        suffix = random.choice(_SUFFIX_LABELS)
+        hostname = ".".join([prefix] + hex_labels + [suffix]) + f".{DOMAIN_ZONE}"
         shards.append(hostname)
 
     shards.append(f"{CMD_END}.{DOMAIN_ZONE}")
@@ -64,7 +101,8 @@ def encode_payload(payload: bytes) -> list[str]:
 def decode_payload(hostnames: list[str]) -> bytes:
     """
     Decode PTR hostnames back into the original payload.
-    Strips the domain suffix, concatenates hex data, XOR decrypts.
+    Strips the domain suffix, extracts only hex-carrying labels (skips realistic prefix/suffix),
+    concatenates hex, XOR decrypts.
     """
     suffix = f".{DOMAIN_ZONE}"
     hex_parts = []
@@ -74,7 +112,7 @@ def decode_payload(hostnames: list[str]) -> bytes:
             break
         if h.lower().endswith(suffix.lower()):
             data_part = h[: -len(suffix)]
-            hex_parts.append(data_part.replace(".", ""))
+            hex_parts.append(_extract_hex_from_hostname_part(data_part))
 
     hex_str = "".join(hex_parts)
     raw = bytes.fromhex(hex_str)
