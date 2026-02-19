@@ -45,7 +45,6 @@ CMD_PAYLOAD = "payload"
 CMD_KEY = "key"
 CMD_TX = "tx"
 CMD_RX = "rx"
-CMD_ACK = "ack"
 CMD_END = "end"
 
 # Session states

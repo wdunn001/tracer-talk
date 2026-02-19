@@ -7,7 +7,7 @@ from dnslib.server import DNSServer, BaseResolver
 
 from server.config import (
     DOMAIN_ZONE, SERVER_IP, DNS_PORT, DNS_LISTEN,
-    CMD_PAYLOAD, CMD_KEY, CMD_TX, CMD_RX, CMD_ACK, CMD_END,
+    CMD_PAYLOAD, CMD_KEY, CMD_TX, CMD_RX, CMD_END,
     FAKE_HOP_BASE_IP,
 )
 
@@ -61,8 +61,6 @@ class TracerResolver(BaseResolver):
             self._on_tx_request(reply, qname, client_ip, data_labels)
         elif cmd == CMD_RX:
             self._on_rx_request(reply, qname, client_ip)
-        elif cmd == CMD_ACK:
-            self._on_ack_request(reply, qname, client_ip)
         elif cmd == CMD_END:
             self._on_end_request(reply, qname, client_ip)
         else:
@@ -110,11 +108,6 @@ class TracerResolver(BaseResolver):
         reply.add_answer(RR(qname, QTYPE.A, rdata=A(SERVER_IP), ttl=0))
         if self.orchestrator:
             self.orchestrator.on_rx_request(client_ip)
-
-    def _on_ack_request(self, reply, qname, client_ip):
-        reply.add_answer(RR(qname, QTYPE.A, rdata=A(SERVER_IP), ttl=0))
-        if self.orchestrator:
-            self.orchestrator.on_ack(client_ip)
 
     def _on_end_request(self, reply, qname, client_ip):
         reply.add_answer(RR(qname, QTYPE.A, rdata=A(SERVER_IP), ttl=0))

@@ -14,5 +14,5 @@ $t=tracert -w 2000 "rx.$Z" 2>&1
 $R=""
 $t|?{$_-match"\.${Z}"}|?{$_-notmatch"(end|empty|rx)\.$Z"}|?{$_-notmatch"Tracing"}|%{
 if($_-match"(\S+)\.$Z"){$d=$Matches[1]-replace"\.$Z","";$R+=$d-replace"\.",""}}
-if($R){Write-Host "server: $(Dec $R)";tracert -h 1 -w 1000 "ack.$Z" 2>&1|Out-Null}
+if($R){Write-Host "server: $(Dec $R)"}
 }

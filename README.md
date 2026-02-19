@@ -50,7 +50,6 @@ All client communication uses `tracert [command].lab.yourdomain.com`:
 | `key.lab.d.com` | Downlink | A-record IP = 4-byte XOR session key |
 | `[hex].tx.lab.d.com` | Uplink | Client sends XOR-encrypted hex-encoded message in subdomain |
 | `rx.lab.d.com` | Downlink | Client polls for messages via fake-hop PTR shards |
-| `ack.lab.d.com` | Uplink | Client acknowledges receipt of last downlink |
 | `end.lab.d.com` | Uplink | Session teardown |
 
 ## Shard Capacity
@@ -287,9 +286,6 @@ Disconnected.
      ICMP probes --> |  --------------------------> |  [MsgBuilder: fake hops with response]
      PTR lookups <-- |  <-------------------------- |  [DNS: message shards]
   7. Decode+display  |                               |
-                     |                               |
-  8. Ack:            |  tracert ack.lab.d.com       |
-     DNS query ----> |  --------------------------> |  [Clear send buffer]
 ```
 
 ## Encryption

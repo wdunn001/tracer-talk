@@ -95,11 +95,6 @@ class Orchestrator:
                 end_marker = f"empty.{DOMAIN_ZONE}"
                 self.icmp.queue_shards(session.client_id, [end_marker])
 
-    def on_ack(self, client_ip: str):
-        """Client acknowledged receipt of last downlink."""
-        session = self._resolve_client(client_ip)
-        self.icmp.clear_client(session.client_id)
-
     def on_end(self, client_ip: str):
         """Client is disconnecting."""
         session = self._resolve_client(client_ip)

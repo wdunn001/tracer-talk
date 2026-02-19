@@ -7,5 +7,5 @@ while read -p "you: " M;do
 traceroute -m1 -w1 "$(e "$M").tx.$Z">/dev/null 2>&1;R=""
 while IFS= read -r l;do echo "$l"|grep -qi "$Z"&&! echo "$l"|grep -qiE "(end|empty|rx)\.$Z"&&{ w=$(echo "$l"|grep -oP '\S+(?=\.'"$Z"')');[ -n "$w" ]&&R+="${w//./}";}
 done< <(traceroute -w2 "rx.$Z" 2>&1)
-[ -n "$R" ]&&{ echo "< $(d "$R")";traceroute -m1 -w1 "ack.$Z">/dev/null 2>&1;}
+[ -n "$R" ]&&echo "< $(d "$R")"
 done

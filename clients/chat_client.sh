@@ -39,6 +39,5 @@ while true;do
   done < <(traceroute -w 2 "rx.$Z" 2>&1)
   if [ -n "$R" ];then
     echo "server: $(dec "$R")"
-    traceroute -m 1 -w 1 "ack.$Z" >/dev/null 2>&1
   fi
 done

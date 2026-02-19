@@ -47,7 +47,7 @@ server: Hi from the other side
 3. If a message is waiting, the ICMP tunnel creates fake hops with PTR hostnames carrying encrypted message shards
 4. The client's `tracert` output shows those hostnames
 5. The client filters lines matching the domain, strips the suffix, concatenates the hex, XOR-decrypts, and displays the message
-6. The client sends an `ack` tracert to confirm receipt
+6. The server clears its send buffer automatically after delivery
 
 If no message is waiting, the server returns an `empty` marker and the client moves on.
 
