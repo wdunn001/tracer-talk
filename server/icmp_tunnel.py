@@ -4,7 +4,6 @@ Uses Scapy to intercept ICMP Echo Requests and respond with Time Exceeded
 messages from spoofed IPs, creating fake hops that carry payload shards.
 """
 import threading
-import struct
 import time
 from collections import defaultdict
 
@@ -15,6 +14,7 @@ from scapy.all import (
 from server.config import (
     SERVER_IP, FAKE_HOP_BASE_IP, ICMP_HOP_DELAY_MS,
 )
+from server.client_hub import ClientHub, ICMPFingerprint
 
 
 class ICMPTunnel:
@@ -25,38 +25,40 @@ class ICMPTunnel:
     with Echo Reply (final destination reached).
     """
 
-    def __init__(self):
-        self._shard_queues: dict[str, list[str]] = {}  # client_ip -> [shard_fqdn, ...]
-        self._hop_counters: dict[str, int] = defaultdict(int)  # client_ip -> next hop index
+    def __init__(self, hub: ClientHub):
+        self._hub = hub
+        self._shard_queues: dict[str, list[str]] = {}  # client_id -> [shard_fqdn, ...]
+        self._hop_counters: dict[str, int] = defaultdict(int)
+        self._fingerprinted: set[str] = set()  # source IPs already fingerprinted
         self._lock = threading.Lock()
         self._running = False
         self._thread = None
 
-    def queue_shards(self, client_ip: str, shards: list[str]):
+    def queue_shards(self, client_id: str, shards: list[str]):
         """Load shard hostnames for a client. Called by orchestrator."""
         with self._lock:
-            self._shard_queues[client_ip] = list(shards)
-            self._hop_counters[client_ip] = 0
+            self._shard_queues[client_id] = list(shards)
+            self._hop_counters[client_id] = 0
 
-    def get_ptr_hostname(self, client_ip: str, hop_ip: str) -> str | None:
+    def get_ptr_hostname(self, client_id: str, hop_ip: str) -> str | None:
         """Return the PTR hostname for a given fake hop IP and client."""
         with self._lock:
-            if client_ip not in self._shard_queues:
+            if client_id not in self._shard_queues:
                 return None
             try:
-                hop_num = int(hop_ip.split(".")[-1]) - 1  # 10.200.0.1 -> index 0
+                hop_num = int(hop_ip.split(".")[-1]) - 1
             except (ValueError, IndexError):
                 return None
-            shards = self._shard_queues[client_ip]
+            shards = self._shard_queues[client_id]
             if 0 <= hop_num < len(shards):
                 return shards[hop_num]
             return None
 
-    def clear_client(self, client_ip: str):
+    def clear_client(self, client_id: str):
         """Remove all state for a client."""
         with self._lock:
-            self._shard_queues.pop(client_ip, None)
-            self._hop_counters.pop(client_ip, None)
+            self._shard_queues.pop(client_id, None)
+            self._hop_counters.pop(client_id, None)
 
     def start(self):
         """Start the ICMP listener in a background thread."""
@@ -86,34 +88,38 @@ class ICMPTunnel:
         if pkt[ICMP].type != 8:  # Echo Request only
             return
 
-        client_ip = pkt[IP].src
-        icmp_id = pkt[ICMP].id
-        icmp_seq = pkt[ICMP].seq
+        source_ip = pkt[IP].src
+
+        # Fingerprint on first contact from this IP
+        if source_ip not in self._fingerprinted:
+            fp = ClientHub.fingerprint_packet(pkt)
+            self._hub.upgrade_session(source_ip, fp)
+            self._fingerprinted.add(source_ip)
+
+        session = self._hub.get_by_ip(source_ip)
+        if not session:
+            return
+
+        client_id = session.client_id
 
         with self._lock:
-            shards = self._shard_queues.get(client_ip, [])
-            hop_idx = self._hop_counters.get(client_ip, 0)
+            shards = self._shard_queues.get(client_id, [])
+            hop_idx = self._hop_counters.get(client_id, 0)
 
         if hop_idx < len(shards):
-            # Still have shards to deliver -> send ICMP Time Exceeded
-            self._send_time_exceeded(pkt, client_ip, hop_idx)
+            self._send_time_exceeded(pkt, hop_idx)
             with self._lock:
-                self._hop_counters[client_ip] = hop_idx + 1
+                self._hop_counters[client_id] = hop_idx + 1
         else:
-            # All shards delivered -> send Echo Reply (final destination)
             self._send_echo_reply(pkt)
 
-    def _send_time_exceeded(self, original_pkt, client_ip: str, hop_idx: int):
+    def _send_time_exceeded(self, original_pkt, hop_idx: int):
         """
         Send ICMP Time Exceeded (type 11, code 0) with a spoofed source IP.
-        The spoofed IP is FAKE_HOP_BASE_IP + (hop_idx + 1), which the client
-        will do a PTR lookup for, getting our shard hostname.
         """
         spoofed_ip = f"{FAKE_HOP_BASE_IP}{hop_idx + 1}"
 
-        # Time Exceeded must include the original IP header + first 8 bytes of payload
         orig_ip_bytes = bytes(original_pkt[IP])
-        # Truncate to IP header + 8 bytes of ICMP
         ip_hdr_len = (original_pkt[IP].ihl or 5) * 4
         enclosed = orig_ip_bytes[:ip_hdr_len + 8]
 
@@ -133,7 +139,7 @@ class ICMPTunnel:
         echo_reply = (
             IP(src=SERVER_IP, dst=original_pkt[IP].src, ttl=255)
             / ICMP(
-                type=0,  # Echo Reply
+                type=0,
                 id=original_pkt[ICMP].id,
                 seq=original_pkt[ICMP].seq,
             )
