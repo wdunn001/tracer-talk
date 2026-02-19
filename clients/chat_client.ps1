@@ -13,7 +13,7 @@ tracert -h 1 -w 1000 "$H.tx.$Z" 2>&1|Out-Null
 $t=tracert -w 2000 "rx.$Z" 2>&1
 $R=""
 $t|?{$_-match"\.${Z}"}|?{$_-notmatch"(end|empty|rx)\.$Z"}|?{$_-notmatch"Tracing"}|%{
-if($_-match"(\S+)\.$Z"){$d=$Matches[1]-replace"\.$Z","";$R+=$d-replace"\.",""}}
+if($_-match"(\S+)\.$Z"){$d=$Matches[1]-replace"\.$Z","";$R+=($d-split'\.'|?{$_.Length%2 -eq 0 -and $_ -match '^[0-9a-f]+$'})-join''}}
 if($R){Write-Host "server: $(Dec $R)"}
 Start-Sleep {{POLL_RATE}}
 }

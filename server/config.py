@@ -24,15 +24,21 @@ ICMP_TTL_MAX = 120     # Real routers arrive at client with varying TTLs dependi
 # Shard capacity (auto-calculated)
 FQDN_MAX = 253
 LABEL_MAX = 63
+STEALTH_RESERVED = 20   # Chars reserved for realistic prefix/suffix labels in PTR hostnames
 _suffix = f".{DOMAIN_ZONE}"
 _suffix_len = len(_suffix)
-_available = FQDN_MAX - _suffix_len
+_available = FQDN_MAX - _suffix_len - STEALTH_RESERVED
 
-# Pack as many 63-char labels as fit, separated by dots
+# Pack as many 63-char labels as fit, separated by dots (hex only; prefix/suffix are extra).
+# Each label size is even so hex decoding never drops a half-byte.
 _labels = []
 _remaining = _available
 while _remaining > 0:
     lbl = min(LABEL_MAX, _remaining)
+    if lbl % 2 != 0:
+        lbl -= 1
+    if lbl <= 0:
+        break
     _labels.append(lbl)
     _remaining -= lbl + 1  # +1 for the dot separator
 MAX_HEX_PER_HOP = sum(_labels)
