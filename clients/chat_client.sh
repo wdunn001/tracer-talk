@@ -1,6 +1,6 @@
 #!/bin/bash
-Z="lab.quasarke.net"
-K=(96 38 118 3)
+Z="lab.mydomain.net"
+K=(192 168 1 100)
 enc(){
   local s="$1" h="" i=0
   while [ $i -lt ${#s} ];do

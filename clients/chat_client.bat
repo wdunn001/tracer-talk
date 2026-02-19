@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
-set S=96.38.118.3
-set Z=lab.quasarke.net
+set S=192.168.1.100
+set Z=lab.mydomain.net
 echo === Tracer Terminal Chat ===
 echo Type message, Enter to send. /quit to exit.
 :L

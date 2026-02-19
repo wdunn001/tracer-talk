@@ -34,8 +34,8 @@ def xor_crypt(data: bytes, key: bytes = XOR_KEY) -> bytes:
 def encode_payload(payload: bytes, compress: bool = True) -> list[str]:
     """
     Encode a payload into a list of PTR hostnames (shards).
-    Returns FQDNs like: '4a6f686e.446f6573.lab.quasarke.net'
-    Plus a terminator: 'end.lab.quasarke.net'
+    Returns FQDNs like: '4a6f686e.446f6573.lab.mydomain.net'
+    Plus a terminator: 'end.lab.mydomain.net'
     """
     if compress:
         payload = zlib.compress(payload, level=9)
