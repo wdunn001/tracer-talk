@@ -15,4 +15,5 @@ $R=""
 $t|?{$_-match"\.${Z}"}|?{$_-notmatch"(end|empty|rx)\.$Z"}|?{$_-notmatch"Tracing"}|%{
 if($_-match"(\S+)\.$Z"){$d=$Matches[1]-replace"\.$Z","";$R+=$d-replace"\.",""}}
 if($R){Write-Host "server: $(Dec $R)"}
+Start-Sleep {{POLL_RATE}}
 }

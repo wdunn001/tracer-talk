@@ -16,7 +16,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from server.config import DOMAIN_ZONE, SERVER_IP
+from server.config import DOMAIN_ZONE, SERVER_IP, POLL_RATE
 
 
 TEMPLATE_FILES = [
@@ -32,7 +32,7 @@ TEMPLATE_FILES = [
 ]
 
 
-def render(template: str, domain: str, ip: str) -> str:
+def render(template: str, domain: str, ip: str, poll_rate: int = POLL_RATE) -> str:
     octets = ip.split(".")
     key_csv = ",".join(octets)
     key_space = " ".join(octets)
@@ -42,6 +42,7 @@ def render(template: str, domain: str, ip: str) -> str:
     out = out.replace("{{SERVER_IP}}", ip)
     out = out.replace("{{KEY_CSV}}", key_csv)
     out = out.replace("{{KEY_SPACE}}", key_space)
+    out = out.replace("{{POLL_RATE}}", str(poll_rate))
     return out
 
 
@@ -51,6 +52,8 @@ def main():
                         help=f"Domain zone (default: {DOMAIN_ZONE} from config.py)")
     parser.add_argument("--ip", "-i", default=SERVER_IP,
                         help=f"Server IP (default: {SERVER_IP} from config.py)")
+    parser.add_argument("--poll", "-r", type=int, default=POLL_RATE,
+                        help=f"Poll rate in seconds between rx checks (default: {POLL_RATE})")
     parser.add_argument("--out", "-o", default="build",
                         help="Output directory (default: build/)")
     args = parser.parse_args()
@@ -68,6 +71,7 @@ def main():
     print(f"Domain:    {args.domain}")
     print(f"Server IP: {args.ip}")
     print(f"XOR key:   [{', '.join(args.ip.split('.'))}]")
+    print(f"Poll rate: {args.poll}s")
     print(f"Output:    {out_dir}/")
     print()
 
@@ -76,7 +80,7 @@ def main():
         with open(src, "r", encoding="utf-8") as f:
             template = f.read()
 
-        rendered = render(template, args.domain, args.ip)
+        rendered = render(template, args.domain, args.ip, args.poll)
 
         dest_dir = os.path.join(out_dir, os.path.dirname(rel_path))
         os.makedirs(dest_dir, exist_ok=True)

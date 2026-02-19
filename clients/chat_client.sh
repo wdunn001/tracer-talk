@@ -40,4 +40,5 @@ while true;do
   if [ -n "$R" ];then
     echo "server: $(dec "$R")"
   fi
+  sleep {{POLL_RATE}}
 done

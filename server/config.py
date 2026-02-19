@@ -40,6 +40,9 @@ MAX_BYTES_PER_HOP = MAX_HEX_PER_HOP // 2  # 2 hex chars = 1 byte
 USABLE_HOPS = MAX_HOPS - RESERVED_HOPS
 MAX_PAYLOAD_BYTES = MAX_BYTES_PER_HOP * USABLE_HOPS
 
+# Client poll rate (seconds between rx polls in the chat loop)
+POLL_RATE = 5  # seconds to wait between downlink polls; lower = more responsive but noisier
+
 # Subdomain command prefixes
 CMD_PAYLOAD = "payload"
 CMD_KEY = "key"
