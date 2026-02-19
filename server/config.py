@@ -54,6 +54,10 @@ CMD_TX = "tx"
 CMD_RX = "rx"
 CMD_END = "end"
 
+# Compression (when enabled, server gzips before encode; client decompresses if gzip magic present)
+COMPRESS_PAYLOAD = True   # Compress initial payload and downlink (rx) messages when client supports it
+GZIP_MAGIC = bytes([0x1F, 0x8B, 0x08])  # First 3 bytes of gzip stream; client uses this to detect
+
 # Session states
 STATE_IDLE = "IDLE"
 STATE_DELIVERING = "DELIVERING"

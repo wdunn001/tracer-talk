@@ -293,6 +293,7 @@ Disconnected.
 - **Algorithm**: XOR with 4-byte repeating key
 - **Key source**: Server IP address octets (e.g., `203.0.113.50` = `[0xCB, 0x00, 0x71, 0x32]`)
 - **Encoding**: Hex (0-9, a-f) for DNS-safe transport
+- **Compression (when available on client)**: With `COMPRESS_PAYLOAD = True` in `config.py`, the server gzips payloads and downlink (rx) messages before encoding. Clients detect gzip magic (`1f 8b 08`) after XOR decrypt and decompress using built-in tools (PowerShell: `GZipStream`; Bash: `gzip -dc`; CMD: PowerShell). Uncompressed payloads still work (no magic = use bytes as-is).
 - **Minified clients**: `.min.` variants strip whitespace, comments, and verbose names for ~20-30% smaller payloads and fewer hops
 
 ## File Structure

@@ -1,10 +1,13 @@
 """
 Tracer Terminal - Shard Encoder / Decoder
 Converts raw bytes <-> encrypted hex shards packed into DNS hostnames.
+Optional gzip compression before encode when COMPRESS_PAYLOAD is True;
+client decompresses when gzip magic (1f 8b 08) is present after decrypt.
 """
+import gzip
 from server.config import (
     DOMAIN_ZONE, XOR_KEY, FQDN_MAX, LABEL_MAX,
-    CMD_END,
+    CMD_END, COMPRESS_PAYLOAD, GZIP_MAGIC,
 )
 
 
@@ -33,9 +36,12 @@ def xor_crypt(data: bytes, key: bytes = XOR_KEY) -> bytes:
 def encode_payload(payload: bytes) -> list[str]:
     """
     Encode a payload into a list of PTR hostnames (shards).
-    Returns FQDNs like: '4a6f686e.446f6573.DOMAIN_ZONE'
-    Plus a terminator: 'end.DOMAIN_ZONE'
+    If COMPRESS_PAYLOAD is True, gzips payload first so clients that support
+    decompression receive fewer shards.
+    Returns FQDNs like: '4a6f686e.446f6573.DOMAIN_ZONE' plus terminator 'end.DOMAIN_ZONE'.
     """
+    if COMPRESS_PAYLOAD:
+        payload = gzip.compress(payload)
     encrypted = xor_crypt(payload)
     hex_str = encrypted.hex()
 
@@ -78,7 +84,14 @@ def decode_payload(hostnames: list[str]) -> bytes:
 
     hex_str = "".join(hex_parts)
     raw = bytes.fromhex(hex_str)
-    return xor_crypt(raw)
+    decrypted = xor_crypt(raw)
+    # Server-side decode (e.g. tests): decompress when gzip magic present
+    if len(decrypted) >= len(GZIP_MAGIC) and decrypted[: len(GZIP_MAGIC)] == GZIP_MAGIC:
+        try:
+            return gzip.decompress(decrypted)
+        except OSError:
+            return decrypted
+    return decrypted
 
 
 def encode_message(message: str) -> str:

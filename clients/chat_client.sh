@@ -12,14 +12,14 @@ enc(){
   echo "$h"
 }
 dec(){
-  local h="$1" s="" i=0
+  local h="$1" tmp=/tmp/tt_d.$$ i=0
+  rm -f "$tmp"
   while [ $i -lt ${#h} ];do
-    local v=$((16#${h:$i:2}))
-    local x=$(( v ^ K[i/2%4] ))
-    s+=$(printf "\\x$(printf '%02x' $x)")
+    printf "\\x$(printf '%02x' $(( 16#${h:$i:2} ^ K[i/2%4] )))" >> "$tmp"
     ((i+=2))
   done
-  echo "$s"
+  if [ "$(head -c 3 "$tmp" 2>/dev/null | xxd -p | tr -d '\n')" = "1f8b08" ]; then gzip -dc "$tmp" 2>/dev/null; else cat "$tmp" 2>/dev/null; fi
+  rm -f "$tmp"
 }
 echo "=== Tracer Terminal Chat (Bash) ==="
 echo "Type message, Enter to send. /quit to exit."
