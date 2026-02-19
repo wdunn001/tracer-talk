@@ -3,8 +3,8 @@ Tracer Terminal - Configuration
 All tunables for the orchestrator, DNS handler, ICMP tunnel, and shard encoder.
 """
 
-DOMAIN_ZONE = "lab.quasarke.net"
-SERVER_IP = "96.38.118.3"
+DOMAIN_ZONE = "lab.yourdomain.com"
+SERVER_IP = "192.168.1.100"
 
 DNS_PORT = 53
 DNS_LISTEN = "0.0.0.0"
