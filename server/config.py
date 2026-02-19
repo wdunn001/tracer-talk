@@ -3,8 +3,8 @@ Tracer Terminal - Configuration
 All tunables for the orchestrator, DNS handler, ICMP tunnel, and shard encoder.
 """
 
-DOMAIN_ZONE = "lab.yourdomain.com"
-SERVER_IP = "192.168.1.100"
+DOMAIN_ZONE = "lab.yourdomain.com"     # CHANGE THIS: must match your NS delegation
+SERVER_IP = "0.0.0.0"                  # CHANGE THIS: your server's public IP
 
 DNS_PORT = 53
 DNS_LISTEN = "0.0.0.0"

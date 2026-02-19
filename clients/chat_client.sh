@@ -1,6 +1,6 @@
 #!/bin/bash
-Z="lab.mydomain.net"
-K=(192 168 1 100)
+Z="{{DOMAIN_ZONE}}"
+K=({{KEY_SPACE}})
 enc(){
   local s="$1" h="" i=0
   while [ $i -lt ${#s} ];do

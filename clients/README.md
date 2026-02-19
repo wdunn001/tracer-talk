@@ -61,39 +61,30 @@ If no message is waiting, the server returns an `empty` marker and the client mo
 All three clients use identical crypto:
 
 - **Algorithm**: XOR with 4-byte repeating key
-- **Key**: The server IP address octets (e.g., `192.168.1.100` = bytes `[96, 38, 118, 3]`)
+- **Key**: The server IP address octets (e.g., `203.0.113.50` = bytes `[203, 0, 113, 50]`)
 - **Encoding**: Hex (0-9, a-f) -- safe for DNS labels
 
-The key is hardcoded in each client script. When the server encodes the payload, the key values in the script match the server's IP.
+The key is baked into each generated client script automatically by `generate.py`.
 
-## Customizing for Your Domain
+## Generating Working Clients
 
-Each client has two values at the top that must match your server config:
+The files in this directory are **templates** containing `{{DOMAIN_ZONE}}`, `{{SERVER_IP}}`, `{{KEY_CSV}}`, and `{{KEY_SPACE}}` placeholders. Do not edit them by hand.
 
-**PowerShell** (`chat_client.ps1`):
-```powershell
-$Z="lab.yourdomain.com"
-$K=[byte[]]@(96,38,118,3)    # your server IP octets
-```
+To produce working client scripts, run from the project root:
 
-**CMD** (`chat_client.bat`):
-```batch
-set S=192.168.1.100
-set Z=lab.yourdomain.com
-```
-And the `$k=@(...)` arrays inside the PowerShell inline calls on lines 10 and 24.
-
-**Bash** (`chat_client.sh`):
 ```bash
-Z="lab.yourdomain.com"
-K=(192 168 1 100)               # your server IP octets
+python generate.py --domain lab.example.com --ip 203.0.113.50
 ```
 
-In normal operation you don't edit these manually -- the server's shard encoder reads the raw script file and delivers it as-is. You configure the domain and IP in `server/config.py` and the bootstrap + ICMP tunnel handles the rest. You only need to edit the client scripts if you want to test them standalone.
+This reads the templates, replaces all placeholders, and writes ready-to-use files into `build/clients/` and `build/bootstrap/`. Point the orchestrator at the generated payload:
+
+```bash
+sudo python -m server.orchestrator --payload build/clients/chat_client.ps1
+```
 
 ## Size Constraints
 
-Each client must fit within the shard capacity of a single `tracert` run (default 30 hops). With the `lab.mydomain.net` domain:
+Each client must fit within the shard capacity of a single `tracert` run (default 30 hops). With a typical domain:
 
 - ~233 hex chars per hop = ~116 bytes per hop
 - 28 usable hops = ~3,248 bytes max

