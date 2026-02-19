@@ -1,0 +1,44 @@
+MIT License
+
+Copyright (c) 2026 Tracer-Terminal Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- SECURITY RESEARCH DISCLAIMER ---
+
+This software is provided strictly for security research, education, and
+authorized penetration testing purposes. It is a proof-of-concept designed to
+demonstrate a class of DNS/ICMP covert channel vulnerabilities so that
+defenders can understand, detect, and mitigate them.
+
+By using this software, you agree that:
+
+1. You will only use it in environments you own or have explicit written
+   authorization to test.
+2. You will not use it to gain unauthorized access to any system, network, or
+   data.
+3. You accept full responsibility for any consequences of your use of this
+   software.
+4. The authors bear no responsibility for any misuse, damage, or legal
+   consequences resulting from the use of this software.
+
+Unauthorized use of this software against systems you do not own or have
+permission to test may violate applicable laws including but not limited to
+the Computer Fraud and Abuse Act (CFAA), the UK Computer Misuse Act, and
+equivalent legislation in other jurisdictions.
