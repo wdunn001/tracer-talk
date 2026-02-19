@@ -1,0 +1,8 @@
+build/
+__pycache__/
+*.pyc
+*.pyo
+
+# Research notes (not part of the tool)
+initial discussion
+plan summary
