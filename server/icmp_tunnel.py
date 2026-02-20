@@ -168,20 +168,24 @@ class ICMPTunnel:
             hop_ips = self._hop_ips.get(client_id, [])
 
         if hop_idx < len(shards) and hop_idx < len(hop_ips):
-            self._send_time_exceeded(pkt, hop_ips[hop_idx])
+            self._send_time_exceeded(pkt, hop_ips[hop_idx], hop_idx)
             with self._lock:
                 self._hop_counters[client_id] = hop_idx + 1
         else:
             self._send_echo_reply(pkt)
 
-    def _send_time_exceeded(self, original_pkt, spoofed_ip: str):
+    def _send_time_exceeded(self, original_pkt, spoofed_ip: str, hop_idx: int):
+        """Send Time Exceeded with TTL that decreases with hop index (plus jitter) to mimic real path."""
         orig_ip_bytes = bytes(original_pkt[IP])
         ip_hdr_len = (original_pkt[IP].ihl or 5) * 4
         enclosed = orig_ip_bytes[:ip_hdr_len + 8]
 
+        # Real routers: TTL in Time Exceeded typically decreases with hop distance. Replicate that.
+        ttl = ICMP_TTL_MAX - hop_idx + random.randint(-2, 2)
+        ttl = max(ICMP_TTL_MIN, min(ICMP_TTL_MAX, ttl))
+
         time_exceeded = (
-            IP(src=spoofed_ip, dst=original_pkt[IP].src,
-               ttl=random.randint(ICMP_TTL_MIN, ICMP_TTL_MAX))
+            IP(src=spoofed_ip, dst=original_pkt[IP].src, ttl=ttl)
             / ICMP(type=11, code=0)
             / Raw(load=enclosed)
         )

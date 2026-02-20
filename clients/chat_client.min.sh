@@ -5,8 +5,8 @@ d(){ local h="$1" t=/tmp/tt_d.$$ i=0;rm -f "$t";while [ $i -lt ${#h} ];do printf
 while read -p "you: " M;do
 [ "$M" = "/quit" ]&&{ traceroute -m1 -w1 "end.$Z">/dev/null 2>&1;break;}
 traceroute -m1 -w1 "$(e "$M").tx.$Z">/dev/null 2>&1;R=""
-while IFS= read -r l;do echo "$l"|grep -qi "$Z"&&! echo "$l"|grep -qiE "(end|empty|rx)\.$Z"&&{ w=$(echo "$l"|grep -oP '\S+(?=\.'"$Z"')');[ -n "$w" ]&&R+=$(echo "$w"|tr '.' '\n'|grep -E '^[0-9a-fA-F]+$'|while read -r lbl; do [ $((${#lbl}%2)) -eq 0 ] && printf "%s" "$lbl"; done);}
-done< <(traceroute -w2 "rx.$Z" 2>&1)
+while IFS= read -r host;do [ "${host%%.*}" = "end" ] && break; R+=$(echo "$host"|tr '.' '\n'|grep -E '^[0-9a-fA-F]+$'|while read -r lbl; do [ $((${#lbl}%2)) -eq 0 ] && printf "%s" "$lbl"; done)
+done< <(traceroute -w2 "rx.$Z" 2>&1|grep -oE '\S+\.\S+\.\S+\.\S+(\.\S+)*')
 [ -n "$R" ]&&echo "< $(d "$R")"
 sleep {{POLL_RATE}}
 done

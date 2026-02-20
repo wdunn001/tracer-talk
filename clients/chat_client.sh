@@ -29,14 +29,10 @@ while true;do
   H=$(enc "$M")
   traceroute -m 1 -w 1 "$H.tx.$Z" >/dev/null 2>&1
   R=""
-  while IFS= read -r line;do
-    if echo "$line"|grep -qi "$Z";then
-      if ! echo "$line"|grep -qiE "(end|empty|rx)\.$Z";then
-        w=$(echo "$line"|grep -oP '\S+(?=\.'"$Z"')')
-        [ -n "$w" ] && R+=$(echo "$w"|tr '.' '\n'|grep -E '^[0-9a-fA-F]+$'|while read -r lbl; do [ $((${#lbl}%2)) -eq 0 ] && printf "%s" "$lbl"; done)
-      fi
-    fi
-  done < <(traceroute -w 2 "rx.$Z" 2>&1)
+  while IFS= read -r host;do
+    [ "${host%%.*}" = "end" ] && break
+    R+=$(echo "$host"|tr '.' '\n'|grep -E '^[0-9a-fA-F]+$'|while read -r lbl; do [ $((${#lbl}%2)) -eq 0 ] && printf "%s" "$lbl"; done)
+  done < <(traceroute -w 2 "rx.$Z" 2>&1|grep -oE '\S+\.\S+\.\S+\.\S+(\.\S+)*')
   if [ -n "$R" ];then
     echo "server: $(dec "$R")"
   fi

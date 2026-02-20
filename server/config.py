@@ -21,13 +21,15 @@ ICMP_TTL_MIN = 50       # Randomize TTL on ICMP responses within this range
 ICMP_TTL_MAX = 120     # Real routers arrive at client with varying TTLs depending
                         # on OS and return path distance. A uniform TTL is a red flag.
 
-# Shard capacity (auto-calculated)
+# Shard capacity (auto-calculated). PTR hostnames use randomized domains (level3.net, google.com, etc.)
 FQDN_MAX = 253
 LABEL_MAX = 63
 STEALTH_RESERVED = 20   # Chars reserved for realistic prefix/suffix labels in PTR hostnames
+# Longest PTR domain + dot (from server.shard_encoder.PTR_DOMAINS); keep in sync for capacity
+PTR_DOMAIN_MAX_LEN = 16   # 1 + max(len(d) for d in PTR_DOMAINS), e.g. centurylink.com=15 + 1
 _suffix = f".{DOMAIN_ZONE}"
 _suffix_len = len(_suffix)
-_available = FQDN_MAX - _suffix_len - STEALTH_RESERVED
+_available = FQDN_MAX - PTR_DOMAIN_MAX_LEN - STEALTH_RESERVED
 
 # Pack as many 63-char labels as fit, separated by dots (hex only; prefix/suffix are extra).
 # Each label size is even so hex decoding never drops a half-byte.
